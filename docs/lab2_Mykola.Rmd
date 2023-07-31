@@ -1,0 +1,184 @@
+---
+title: "Lab2 STAT515"
+author: "Mykola Signayevskyy"
+date: "2023-04-13"
+output:
+  html_document: default
+  pdf_document: default
+  df_print: paged
+  word_document: default
+---
+
+#Question: 
+
+#Consider the “Body Fat.csv” data set. Consider “% Body Fat” as the response variable.
+#Using this data set fit an appropriate model to predict “% Body Fat”. 
+#Needs to Justify your actions and interpret your results.
+
+#Hints:
+#Remove the `Density` variable before the analysis
+#Include an interaction term (if possible and if make sense)
+#Include a non-linear term (if possible and if make sense)
+#Use any variable selection technique
+#Use cross validation method to select an appropriate model
+# Use residual analysis. 
+#Also use your imagination
+
+```{r}
+library(ISLR)
+library(MASS)
+library(tidyverse)
+```
+```{r}
+source("/Users/mykola/Desktop/STAT515/third_lesson/hw.R")
+```
+
+
+```{r}
+body_fat <- read.csv("/Users/mykola/Desktop/STAT515/lab2/Body Fat(5).csv")
+head(body_fat)
+```
+
+```{r}
+summary(body_fat)
+```
+```{r}
+table(is.na(body_fat))
+```
+
+```{r}
+body_fat <- subset(body_fat, select = -c(Density))
+```
+
+```{r}
+model <- lm(X.Body.Fat ~ ., data = body_fat)
+summary(model)
+```
+#### as I can see
+
+```{r}
+pairs(~ X.Body.Fat + Age + Weight + Height + Neck + Chest + Abdomen + Hip + Thigh + Knee + Ankle + Biceps + Forearm + Wrist, data = body_fat)
+```
+```{r}
+model_i1 <- lm(`X.Body.Fat` ~ . + Abdomen*Hip*Age, data = body_fat) #I am trying to do logical in my opinion intersect between person's age, Hip circumference and Abdomen circumference
+summary(model_i1)
+```
+
+```{r}
+model_non_l <- lm(`X.Body.Fat` ~ . + Abdomen*Hip + I(Abdomen^2), data = body_fat)
+summary(model_non_l)
+```
+
+
+```{r}
+library(leaps)
+
+
+set.seed (1) # reproducibility 
+
+#data splitting 50%,50%
+train=sample(c(TRUE,FALSE), nrow(body_fat),rep=TRUE)
+test=(!train)
+```
+
+
+```{r}
+regfit.best=regsubsets(X.Body.Fat~.,data=body_fat[train,], nvmax =14)
+```
+
+```{r}
+test.mat=model.matrix(X.Body.Fat~.,data=body_fat[test,])
+```
+
+```{r}
+(val.errors=rep(NA,14)) 
+```
+
+```{r}
+for(i in 1:14){
+  coefi=coef(regfit.best,id=i)
+  pred=test.mat[,names(coefi)]%*%coefi
+  val.errors[i]=mean((body_fat$X.Body.Fat[test]-pred)^2)
+}
+
+#MSE values for all 19 models.
+val.errors
+```
+
+```{r}
+cor(body_fat[, -1])
+```
+
+
+```{r}
+which.min(val.errors)
+```
+
+```{r}
+plot(val.errors,type = 'b')
+```
+
+```{r}
+coef(regfit.best ,4)
+```
+
+### 10-Fold Cross Validation
+```{r}
+k <- 10 # 10-fold cross-validation
+set.seed(1)
+```
+
+```{r}
+folds <- sample(1:k, nrow(body_fat), replace = TRUE)
+```
+
+```{r}
+(cv.errors <- matrix(NA, k, 14, dimnames = list(NULL, paste(1:14))))
+```
+
+
+```{r}
+predict.regsubsets = function(object, newdata, id, ...){
+  form=as.formula(object$call[[2]])
+  mat=model.matrix(form, newdata)
+  coefi=coef(object, id=id)
+  xvars=names(coefi)
+  mat[,xvars]%*%coefi
+}
+```
+
+```{r}
+for(j in 1:k){
+  best.fit=regsubsets(X.Body.Fat~., data=body_fat[folds!=j,], nvmax=14)
+  
+  for(i in 1:14){
+    pred = predict(best.fit, body_fat[folds==j,], id=i)
+    cv.errors[j,i] = mean( (body_fat$X.Body.Fat[folds==j]-pred)^2 )
+  }
+}
+```
+
+```{r}
+# Column average
+mean.cv.errors=apply(cv.errors, 2, mean)
+which.min(mean.cv.errors)
+```
+
+```{r}
+plot(mean.cv.errors ,type="b")
+```
+```{r}
+reg.best=regsubsets (X.Body.Fat~.,data=body_fat , nvmax=14)
+coef(reg.best ,11) ## full data set.
+```
+
+```{r}
+reg.best=regsubsets (X.Body.Fat~.,data=body_fat , nvmax=14)
+coef(reg.best ,3)
+```
+
+## First, I checked the logical permutations in my opinion, such as abdomen circumference and hip circumference. I also checked the permutations for abdomen circumference, hip circumference, and age. Because as people age, their overall waist circumference starts to increase due to less mobility. I saw that these crossovers have no serious effect on the model, while the Abdomen value itself has a huge weight for the body fat percentage dependent value. So I decided to move on to selecting variables for the model and finding the best model. I decided to start with the Validation Set Approach to find the best model. The results were good, because it turned out that for the model it's best to use 4 variables: Weight Abdomen Biceps Wrist, which means that this model can be easily explained. 
+
+## After this, I used k-Fold Cross-Validation, which showed completely different results. This time the best number of variables for the model is 11. This is quite a lot and difficult to explain, even though the mean squared error is below 20. I noticed on the graph that the model with 3 variables has almost the same error value, which in my opinion is the best possible variant.
+
+# Also please note that when you try to knit file in phd the graph for Validation Set Approach is different from what I show in the code. When I run the code I get a graph with 4 best values, but when the file is knited it shows 2. I attach a screenshot to this file.
